@@ -20,9 +20,14 @@ larger_text() {
 }
 
 while true; do
-  echo "$(echo)$(tput setaf 4)===============================================$(tput sgr0)"
-  larger_text 6 " Speedtest CLI 管理工具 "
-  echo "$(tput setaf 4)===============================================$(tput sgr0)"
+  # 美化功能选择界面，提高存在感
+  tput setaf 4
+  tput bold
+  echo ""
+  echo "================================================="
+  echo "                  Speedtest CLI 管理工具               "
+  echo "================================================="
+  tput sgr0
 
   larger_text 3 "请选择一个操作:"
 
