@@ -4,3 +4,7 @@
 wget -O ipv6_manager.sh "https://raw.githubusercontent.com/1keji/AddIPv6/refs/heads/main/ipv6_manager.sh" && chmod +x ipv6_manager.sh && ./ipv6_manager.sh
 ~~~
 
+测速脚本
+~~~shell
+wget -O speedtest_manager.sh "https://raw.githubusercontent.com/1keji/AddIPv6/main/speedtest_manager.sh" && chmod +x speedtest_manager.sh && ./speedtest_manager.sh
+~~~
