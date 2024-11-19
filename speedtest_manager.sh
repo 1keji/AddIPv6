@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Speedtest CLI Installation Script
-# 本测速脚本使用的是Speedtest官方测速程序。如果之前安装过官方旧版或者非官方版本，请先选2卸载之前的版本。
+# 本测速脚本使用的是，Speedtest官方测速程序。如果之前安装过官方旧版或者非官方版本，请先选2卸载之前的版本。
 
 echo "========================="
 echo " Speedtest CLI 管理工具 "
