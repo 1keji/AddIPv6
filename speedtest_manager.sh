@@ -11,13 +11,8 @@ echo_with_style() {
   tput sgr0      # 重置所有样式
 }
 
-# 使文本更大
-larger_text() {
-  tput bold
-  tput setaf $1  # 设置前景色
-  echo "$2" | fold -w 80 | sed 's/^/    /'
-  tput sgr0
-}
+# 去除脚本中的可能存在的Windows换行符，防止错误
+sed -i 's/\r//' "$0"
 
 while true; do
   # 美化功能选择界面，提高存在感
@@ -29,13 +24,15 @@ while true; do
   echo "================================================="
   tput sgr0
 
-  larger_text 3 "请选择一个操作:"
-
-  larger_text 2 "1. 安装 Speedtest CLI"
-  larger_text 2 "2. 移除旧版本和非官方版本"
-  larger_text 2 "3. 卸载 Speedtest CLI"
-  larger_text 2 "4. 运行 Speedtest 测速"
-  larger_text 2 "0. 退出"
+  tput setaf 3
+  tput bold
+  echo "请选择一个操作:"
+  echo "1. 安装 Speedtest CLI"
+  echo "2. 移除旧版本和非官方版本"
+  echo "3. 卸载 Speedtest CLI"
+  echo "4. 运行 Speedtest 测速"
+  echo "0. 退出"
+  tput sgr0
 
   echo -n "$(tput setaf 3)请输入你的选择: $(tput sgr0)"
   read choice
