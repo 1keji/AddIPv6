@@ -20,9 +20,9 @@ larger_text() {
 }
 
 while true; do
-  echo "\n\033[1;34m===============================================\033[0m"
+  echo "$(echo)$(tput setaf 4)===============================================$(tput sgr0)"
   larger_text 6 " Speedtest CLI 管理工具 "
-  echo "\033[1;34m===============================================\033[0m"
+  echo "$(tput setaf 4)===============================================$(tput sgr0)"
 
   larger_text 3 "请选择一个操作:"
 
@@ -32,7 +32,7 @@ while true; do
   larger_text 2 "4. 运行 Speedtest 测速"
   larger_text 2 "0. 退出"
 
-  echo -n "\033[1;33m请输入你的选择: \033[0m"
+  echo -n "$(tput setaf 3)请输入你的选择: $(tput sgr0)"
   read choice
 
   case "$choice" in
