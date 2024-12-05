@@ -55,10 +55,38 @@ detect_os() {
     echo "版本代号: $VERSION_CODENAME"
 }
 
+# 函数：删除错误的 Docker 仓库配置
+remove_incorrect_docker_repo() {
+    echo "检查并删除错误的 Docker 仓库配置..."
+
+    # 定义正确的仓库 URL
+    CORRECT_REPO="https://download.docker.com/linux/${OS}"
+
+    # 在 sources.list 中查找错误的 Docker 仓库配置
+    if grep -E "download.docker.com/linux/(ubuntu|debian)" /etc/apt/sources.list | grep -v "${CORRECT_REPO}" >/dev/null 2>&1; then
+        echo "在 /etc/apt/sources.list 中发现错误的 Docker 仓库配置，正在删除..."
+        sed -i "/download.docker.com\/linux\/\(ubuntu\|debian\)/d" /etc/apt/sources.list
+    fi
+
+    # 在 sources.list.d 目录下查找并删除错误的 Docker 仓库配置文件
+    for file in /etc/apt/sources.list.d/*.list; do
+        if [ -f "$file" ]; then
+            if grep -E "download.docker.com/linux/(ubuntu|debian)" "$file" | grep -v "${CORRECT_REPO}" >/dev/null 2>&1; then
+                echo "发现错误的 Docker 仓库配置文件：$file，正在删除..."
+                rm -f "$file"
+            fi
+        fi
+    done
+}
+
 # 函数：添加 Docker 仓库
 add_docker_repo() {
     echo "添加 Docker 的官方 GPG 密钥..."
     curl -fsSL https://download.docker.com/linux/${OS}/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+    # 删除旧的 Docker 仓库配置
+    echo "删除旧的 Docker 仓库配置..."
+    rm -f /etc/apt/sources.list.d/docker.list
 
     echo "设置 Docker 的 APT 仓库..."
     echo \
@@ -82,6 +110,9 @@ install_docker() {
         curl \
         gnupg \
         lsb-release
+
+    # 检查并删除错误的 Docker 仓库配置
+    remove_incorrect_docker_repo
 
     # 添加 Docker 的官方 GPG 密钥和 APT 仓库
     add_docker_repo
