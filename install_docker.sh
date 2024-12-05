@@ -22,26 +22,37 @@ show_menu() {
 detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
+        # 将 ID 和 ID_LIKE 转换为小写
+        ID=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
+        ID_LIKE=$(echo "$ID_LIKE" | tr '[:upper:]' '[:lower:]')
         # 优先使用 ID 来检测
-        if [[ "$ID" == "ubuntu" ]]; then
-            OS="ubuntu"
-        elif [[ "$ID" == "debian" ]]; then
-            OS="debian"
-        else
-            # 如果 ID 不是 ubuntu 或 debian，尝试使用 ID_LIKE
-            if [[ "$ID_LIKE" == *"ubuntu"* ]]; then
+        case "$ID" in
+            ubuntu)
                 OS="ubuntu"
-            elif [[ "$ID_LIKE" == *"debian"* ]]; then
+                ;;
+            debian)
                 OS="debian"
-            else
-                OS=""
-            fi
-        fi
+                ;;
+            *)
+                # 如果 ID 不是 ubuntu 或 debian，尝试使用 ID_LIKE
+                if echo "$ID_LIKE" | grep -qw 'ubuntu'; then
+                    OS="ubuntu"
+                elif echo "$ID_LIKE" | grep -qw 'debian'; then
+                    OS="debian"
+                else
+                    OS=""
+                fi
+                ;;
+        esac
         VERSION_CODENAME=$(echo "$VERSION_CODENAME" | tr '[:upper:]' '[:lower:]')
     else
         echo "无法检测操作系统。"
         exit 1
     fi
+
+    # 打印检测到的操作系统和版本代号（用于调试）
+    echo "检测到的操作系统: $OS"
+    echo "版本代号: $VERSION_CODENAME"
 }
 
 # 函数：添加 Docker 仓库
@@ -222,10 +233,6 @@ fi
 # 检测操作系统
 detect_os
 
-# 打印检测到的操作系统和版本代号（用于调试）
-echo "检测到的操作系统: $OS"
-echo "版本代号: $VERSION_CODENAME"
-
 # 验证是否支持当前操作系统
 if [[ "$OS" != "ubuntu" && "$OS" != "debian" ]]; then
     echo "当前操作系统不受支持。本脚本仅支持 Ubuntu 和 Debian。"
@@ -265,3 +272,4 @@ while true; do
     esac
     echo ""
 done
+
