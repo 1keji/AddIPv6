@@ -2,7 +2,7 @@
 
 # Docker和Docker Compose管理脚本
 # 提供安装、卸载、查询状态和退出选项
-# 适用于Ubuntu 20.04及以上版本
+# 适用于Ubuntu和Debian系统
 
 set -e
 
@@ -16,6 +16,29 @@ show_menu() {
     echo "3. 查询安装情况和运行状态"
     echo "4. 退出脚本"
     echo "=========================================="
+}
+
+# 函数：检测操作系统类型
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        VERSION_CODENAME=$VERSION_CODENAME
+    else
+        echo "无法检测操作系统。"
+        exit 1
+    fi
+}
+
+# 函数：添加Docker仓库
+add_docker_repo() {
+    echo "添加Docker的官方GPG密钥..."
+    curl -fsSL https://download.docker.com/linux/${OS}/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+    echo "设置Docker的APT仓库..."
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/${OS} \
+      ${VERSION_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 }
 
 # 函数：安装 Docker 和 Docker Compose
@@ -35,15 +58,8 @@ install_docker() {
         gnupg \
         lsb-release
 
-    # 添加Docker的官方GPG密钥
-    echo "添加Docker的官方GPG密钥..."
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-    # 设置Docker的APT仓库
-    echo "设置Docker的APT仓库..."
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    # 添加Docker的官方GPG密钥和APT仓库
+    add_docker_repo
 
     # 再次更新APT包索引
     echo "再次更新APT包索引..."
@@ -186,6 +202,15 @@ exit_script() {
 # 检查是否以root用户运行
 if [ "$EUID" -ne 0 ]; then
     echo "请以root用户或使用sudo运行此脚本。"
+    exit 1
+fi
+
+# 检测操作系统
+detect_os
+
+# 验证是否支持当前操作系统
+if [[ "$OS" != "ubuntu" && "$OS" != "debian" ]]; then
+    echo "当前操作系统不受支持。本脚本仅支持Ubuntu和Debian。"
     exit 1
 fi
 
