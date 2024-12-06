@@ -33,41 +33,17 @@ install_nginx() {
   fi
 
   read -p "请输入你的邮箱地址（用于 Let's Encrypt 通知）： " EMAIL
-  read -p "请输入你的域名（例如 example.com）： " DOMAIN
+  read -p "请输入你的域名（例如 example.com 或 sub.example.com）： " DOMAIN
   read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
-
-  # 询问是否需要为 www 子域名配置证书
-  while true; do
-    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
-    case $include_www in
-      y|Y )
-        INCLUDE_WWW=true
-        break
-        ;;
-      n|N )
-        INCLUDE_WWW=false
-        break
-        ;;
-      * )
-        echo "请输入 y 或 n。"
-        ;;
-    esac
-  done
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
 
   echo "配置 Nginx 反向代理..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    SERVER_NAME="$DOMAIN www.$DOMAIN"
-  else
-    SERVER_NAME="$DOMAIN"
-  fi
-
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $SERVER_NAME;
+    server_name $DOMAIN;
 
     location / {
         proxy_pass $TARGET;
@@ -95,11 +71,7 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  else
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  fi
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -112,34 +84,13 @@ EOF
 
   echo "Nginx 反向代理和 TLS 证书配置完成！"
   echo "你的网站现在可以通过 https://$DOMAIN 访问。"
-  if [ "$INCLUDE_WWW" = true ]; then
-    echo "以及 https://www.$DOMAIN"
-  fi
 }
 
 # 定义添加配置函数
 add_config() {
-  read -p "请输入要添加的域名（例如 example.com）： " DOMAIN
+  read -p "请输入要添加的域名（例如 example.com 或 sub.example.com）： " DOMAIN
   read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
   read -p "请输入用于 TLS 证书的邮箱地址： " EMAIL
-
-  # 询问是否需要为 www 子域名配置证书
-  while true; do
-    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
-    case $include_www in
-      y|Y )
-        INCLUDE_WWW=true
-        break
-        ;;
-      n|N )
-        INCLUDE_WWW=false
-        break
-        ;;
-      * )
-        echo "请输入 y 或 n。"
-        ;;
-    esac
-  done
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
@@ -150,16 +101,10 @@ add_config() {
   fi
 
   echo "配置 Nginx 反向代理..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    SERVER_NAME="$DOMAIN www.$DOMAIN"
-  else
-    SERVER_NAME="$DOMAIN"
-  fi
-
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $SERVER_NAME;
+    server_name $DOMAIN;
 
     location / {
         proxy_pass $TARGET;
@@ -187,11 +132,7 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  else
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  fi
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -199,9 +140,6 @@ EOF
   fi
 
   echo "配置添加完成！你的网站现在可以通过 https://$DOMAIN 访问。"
-  if [ "$INCLUDE_WWW" = true ]; then
-    echo "以及 https://www.$DOMAIN"
-  fi
 }
 
 # 定义修改配置函数
@@ -241,35 +179,11 @@ modify_config() {
     read -p "请输入新的邮箱地址： " NEW_EMAIL
   fi
 
-  # 询问是否需要为 www 子域名配置证书
-  while true; do
-    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
-    case $include_www in
-      y|Y )
-        INCLUDE_WWW=true
-        break
-        ;;
-      n|N )
-        INCLUDE_WWW=false
-        break
-        ;;
-      * )
-        echo "请输入 y 或 n。"
-        ;;
-    esac
-  done
-
   echo "更新 Nginx 配置..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    SERVER_NAME="$DOMAIN www.$DOMAIN"
-  else
-    SERVER_NAME="$DOMAIN"
-  fi
-
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $SERVER_NAME;
+    server_name $DOMAIN;
 
     location / {
         proxy_pass $NEW_TARGET;
@@ -292,12 +206,8 @@ EOF
   echo "重新加载 Nginx..."
   systemctl reload nginx
 
-  echo "申请 Let's Encrypt TLS 证书..."
-  if [ "$INCLUDE_WWW" = true ]; then
-    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  else
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-  fi
+  echo "重新申请 Let's Encrypt TLS 证书..."
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -315,6 +225,7 @@ EOF
   fi
 
   echo "配置修改完成！"
+  echo "你的网站现在可以通过 https://$DOMAIN 访问。"
 }
 
 # 定义卸载函数
