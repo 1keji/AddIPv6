@@ -36,14 +36,38 @@ install_nginx() {
   read -p "请输入你的域名（例如 example.com）： " DOMAIN
   read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
 
+  # 询问是否需要为 www 子域名配置证书
+  while true; do
+    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
+    case $include_www in
+      y|Y )
+        INCLUDE_WWW=true
+        break
+        ;;
+      n|N )
+        INCLUDE_WWW=false
+        break
+        ;;
+      * )
+        echo "请输入 y 或 n。"
+        ;;
+    esac
+  done
+
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
 
   echo "配置 Nginx 反向代理..."
+  if [ "$INCLUDE_WWW" = true ]; then
+    SERVER_NAME="$DOMAIN www.$DOMAIN"
+  else
+    SERVER_NAME="$DOMAIN"
+  fi
+
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $DOMAIN www.$DOMAIN;
+    server_name $SERVER_NAME;
 
     location / {
         proxy_pass $TARGET;
@@ -71,7 +95,11 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  if [ "$INCLUDE_WWW" = true ]; then
+    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  else
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  fi
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -84,6 +112,9 @@ EOF
 
   echo "Nginx 反向代理和 TLS 证书配置完成！"
   echo "你的网站现在可以通过 https://$DOMAIN 访问。"
+  if [ "$INCLUDE_WWW" = true ]; then
+    echo "以及 https://www.$DOMAIN"
+  fi
 }
 
 # 定义添加配置函数
@@ -91,6 +122,24 @@ add_config() {
   read -p "请输入要添加的域名（例如 example.com）： " DOMAIN
   read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
   read -p "请输入用于 TLS 证书的邮箱地址： " EMAIL
+
+  # 询问是否需要为 www 子域名配置证书
+  while true; do
+    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
+    case $include_www in
+      y|Y )
+        INCLUDE_WWW=true
+        break
+        ;;
+      n|N )
+        INCLUDE_WWW=false
+        break
+        ;;
+      * )
+        echo "请输入 y 或 n。"
+        ;;
+    esac
+  done
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
@@ -101,10 +150,16 @@ add_config() {
   fi
 
   echo "配置 Nginx 反向代理..."
+  if [ "$INCLUDE_WWW" = true ]; then
+    SERVER_NAME="$DOMAIN www.$DOMAIN"
+  else
+    SERVER_NAME="$DOMAIN"
+  fi
+
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $DOMAIN www.$DOMAIN;
+    server_name $SERVER_NAME;
 
     location / {
         proxy_pass $TARGET;
@@ -132,7 +187,11 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  if [ "$INCLUDE_WWW" = true ]; then
+    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  else
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  fi
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -140,6 +199,9 @@ EOF
   fi
 
   echo "配置添加完成！你的网站现在可以通过 https://$DOMAIN 访问。"
+  if [ "$INCLUDE_WWW" = true ]; then
+    echo "以及 https://www.$DOMAIN"
+  fi
 }
 
 # 定义修改配置函数
@@ -156,17 +218,58 @@ modify_config() {
   fi
 
   read -p "请输入新的反向代理目标地址（例如 http://localhost:3000）： " NEW_TARGET
-  read -p "是否需要更新 TLS 证书的邮箱地址？ (y/n): " UPDATE_EMAIL
 
-  if [[ "$UPDATE_EMAIL" == "y" || "$UPDATE_EMAIL" == "Y" ]]; then
+  # 询问是否需要更新 TLS 证书的邮箱地址
+  while true; do
+    read -p "是否需要更新 TLS 证书的邮箱地址？ (y/n): " update_email
+    case $update_email in
+      y|Y )
+        UPDATE_EMAIL=true
+        break
+        ;;
+      n|N )
+        UPDATE_EMAIL=false
+        break
+        ;;
+      * )
+        echo "请输入 y 或 n。"
+        ;;
+    esac
+  done
+
+  if [ "$UPDATE_EMAIL" = true ]; then
     read -p "请输入新的邮箱地址： " NEW_EMAIL
   fi
 
+  # 询问是否需要为 www 子域名配置证书
+  while true; do
+    read -p "是否需要为 www 子域名（www.$DOMAIN）配置证书？ (y/n): " include_www
+    case $include_www in
+      y|Y )
+        INCLUDE_WWW=true
+        break
+        ;;
+      n|N )
+        INCLUDE_WWW=false
+        break
+        ;;
+      * )
+        echo "请输入 y 或 n。"
+        ;;
+    esac
+  done
+
   echo "更新 Nginx 配置..."
+  if [ "$INCLUDE_WWW" = true ]; then
+    SERVER_NAME="$DOMAIN www.$DOMAIN"
+  else
+    SERVER_NAME="$DOMAIN"
+  fi
+
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
-    server_name $DOMAIN www.$DOMAIN;
+    server_name $SERVER_NAME;
 
     location / {
         proxy_pass $NEW_TARGET;
@@ -189,7 +292,19 @@ EOF
   echo "重新加载 Nginx..."
   systemctl reload nginx
 
-  if [[ "$UPDATE_EMAIL" == "y" || "$UPDATE_EMAIL" == "Y" ]]; then
+  echo "申请 Let's Encrypt TLS 证书..."
+  if [ "$INCLUDE_WWW" = true ]; then
+    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  else
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  fi
+
+  if [ $? -ne 0 ]; then
+      echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
+      exit 1
+  fi
+
+  if [ "$UPDATE_EMAIL" = true ]; then
     echo "更新 TLS 证书的邮箱地址..."
     certbot update_account --email "$NEW_EMAIL"
 
