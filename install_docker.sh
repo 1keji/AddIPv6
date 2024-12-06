@@ -9,7 +9,10 @@ set -e
 # 函数：显示菜单
 show_menu() {
     echo "=========================================="
-    echo "     Docker 和 Docker Compose 管理脚本      "
+    echo "一点科技*Docker 和 Docker Compose 管理脚本"
+    echo "  博  客： https://1keji.net"
+    echo "  YouTube：https://www.youtube.com/@1keji_net"
+    echo "  GitHub： https://github.com/1keji"
     echo "=========================================="
     echo "1. 安装 Docker 和 Docker Compose"
     echo "2. 卸载 Docker 和 Docker Compose"
