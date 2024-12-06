@@ -47,10 +47,16 @@ server {
 
     location / {
         proxy_pass $TARGET;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # 可选：设置 WebSocket 的超时时间
+        proxy_read_timeout 86400;
     }
 }
 EOF
@@ -108,10 +114,16 @@ server {
 
     location / {
         proxy_pass $TARGET;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # 可选：设置 WebSocket 的超时时间
+        proxy_read_timeout 86400;
     }
 }
 EOF
@@ -187,10 +199,16 @@ server {
 
     location / {
         proxy_pass $NEW_TARGET;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # 可选：设置 WebSocket 的超时时间
+        proxy_read_timeout 86400;
     }
 }
 EOF
@@ -207,7 +225,11 @@ EOF
   systemctl reload nginx
 
   echo "重新申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  if [ "$UPDATE_EMAIL" = true ]; then
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$NEW_EMAIL"
+  else
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  fi
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
