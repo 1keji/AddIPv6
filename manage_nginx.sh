@@ -281,8 +281,8 @@ uninstall_nginx() {
 
 # 显示菜单
 while true; do
-  echo "==============================="
-  echo "  一点科技 - Nginx 管理脚本"
+  echo "======**一点科技**================"
+  echo "      Nginx 管理脚本"
   echo "  博  客： https://1keji.net"
   echo "  YouTube：https://www.youtube.com/@1keji_net"
   echo "  GitHub： https://github.com/1keji"
