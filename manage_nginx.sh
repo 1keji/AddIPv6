@@ -282,10 +282,10 @@ uninstall_nginx() {
 # 显示菜单
 while true; do
   echo "==============================="
-  echo "  【【一点科技 - Nginx 管理脚本】】"
-  echo "  博客：https://1keji.net"
+  echo "  一点科技 - Nginx 管理脚本"
+  echo "  博  客： https://1keji.net"
   echo "  YouTube：https://www.youtube.com/@1keji_net"
-  echo "  GitHub：https://github.com/1keji"
+  echo "  GitHub： https://github.com/1keji"
   echo "==============================="
   echo "1. 安装 Nginx 及配置反向代理和 TLS"
   echo "2. 添加新的反向代理配置"
