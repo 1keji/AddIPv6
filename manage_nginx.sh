@@ -11,21 +11,36 @@ install_nginx() {
   echo "更新系统包..."
   apt update && apt upgrade -y
 
-  echo "安装 Nginx 和 Certbot..."
-  apt install -y nginx certbot python3-certbot-nginx
+  echo "安装 Nginx、UFW 和 Certbot..."
+  apt install -y nginx ufw certbot python3-certbot-nginx
+
+  echo "确保 Nginx 配置目录存在..."
+  mkdir -p /etc/nginx/sites-available
+  mkdir -p /etc/nginx/sites-enabled
+
+  echo "启动并启用 Nginx 服务..."
+  systemctl start nginx
+  systemctl enable nginx
 
   echo "配置防火墙允许 HTTP 和 HTTPS..."
   ufw allow 'Nginx Full'
-  ufw --force enable
+  
+  # 检查 UFW 是否已启用，若未启用则启用
+  if ! ufw status | grep -q "Status: active"; then
+    ufw --force enable
+  else
+    echo "UFW 已经启用。"
+  fi
 
   read -p "请输入你的邮箱地址（用于 Let's Encrypt 通知）： " EMAIL
   read -p "请输入你的域名（例如 example.com）： " DOMAIN
   read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
+  ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
 
   echo "配置 Nginx 反向代理..."
-  cat > $CONFIG_PATH <<EOF
+  cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
@@ -40,13 +55,15 @@ server {
 }
 EOF
 
-  ln -s $CONFIG_PATH /etc/nginx/sites-enabled/
+  echo "创建符号链接到 sites-enabled..."
+  ln -s "$CONFIG_PATH" "$ENABLED_PATH"
 
   echo "测试 Nginx 配置..."
   nginx -t
 
   if [ $? -ne 0 ]; then
       echo "Nginx 配置测试失败，请检查配置文件。"
+      rm "$ENABLED_PATH"
       exit 1
   fi
 
@@ -54,10 +71,16 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $EMAIL
+  certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+
+  if [ $? -ne 0 ]; then
+      echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
+      exit 1
+  fi
 
   echo "设置自动续期..."
   systemctl enable certbot.timer
+  systemctl start certbot.timer
 
   echo "Nginx 反向代理和 TLS 证书配置完成！"
   echo "你的网站现在可以通过 https://$DOMAIN 访问。"
@@ -70,6 +93,7 @@ add_config() {
   read -p "请输入用于 TLS 证书的邮箱地址： " EMAIL
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
+  ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
 
   if [ -f "$CONFIG_PATH" ]; then
     echo "配置文件 $DOMAIN 已存在。"
@@ -77,7 +101,7 @@ add_config() {
   fi
 
   echo "配置 Nginx 反向代理..."
-  cat > $CONFIG_PATH <<EOF
+  cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
@@ -92,14 +116,15 @@ server {
 }
 EOF
 
-  ln -s $CONFIG_PATH /etc/nginx/sites-enabled/
+  echo "创建符号链接到 sites-enabled..."
+  ln -s "$CONFIG_PATH" "$ENABLED_PATH"
 
   echo "测试 Nginx 配置..."
   nginx -t
 
   if [ $? -ne 0 ]; then
       echo "Nginx 配置测试失败，请检查配置文件。"
-      rm /etc/nginx/sites-enabled/$DOMAIN
+      rm "$ENABLED_PATH"
       exit 1
   fi
 
@@ -107,7 +132,12 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $EMAIL
+  certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+
+  if [ $? -ne 0 ]; then
+      echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
+      exit 1
+  fi
 
   echo "配置添加完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
@@ -133,7 +163,7 @@ modify_config() {
   fi
 
   echo "更新 Nginx 配置..."
-  cat > $CONFIG_PATH <<EOF
+  cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
@@ -161,7 +191,12 @@ EOF
 
   if [[ "$UPDATE_EMAIL" == "y" || "$UPDATE_EMAIL" == "Y" ]]; then
     echo "更新 TLS 证书的邮箱地址..."
-    certbot update_account --email $NEW_EMAIL
+    certbot update_account --email "$NEW_EMAIL"
+
+    if [ $? -ne 0 ]; then
+        echo "Certbot 更新邮箱地址失败。"
+        exit 1
+    fi
   fi
 
   echo "配置修改完成！"
@@ -179,8 +214,8 @@ uninstall_nginx() {
   systemctl stop nginx
   systemctl disable nginx
 
-  echo "卸载 Nginx 和 Certbot..."
-  apt remove --purge -y nginx certbot python3-certbot-nginx
+  echo "卸载 Nginx、UFW 和 Certbot..."
+  apt remove --purge -y nginx ufw certbot python3-certbot-nginx
 
   echo "删除 Nginx 配置文件..."
   rm -rf /etc/nginx/sites-available/
