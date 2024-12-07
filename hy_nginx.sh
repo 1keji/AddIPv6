@@ -34,29 +34,44 @@ install_nginx() {
 
   read -p "请输入你的邮箱地址（用于 Let's Encrypt 通知）： " EMAIL
   read -p "请输入你的域名（例如 example.com 或 sub.example.com）： " DOMAIN
-  read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
+
+  # 创建网站根目录
+  WEB_ROOT="/var/www/$DOMAIN/html"
+  echo "创建网站根目录 $WEB_ROOT ..."
+  mkdir -p "$WEB_ROOT"
+  chown -R www-data:www-data /var/www/"$DOMAIN"
+  chmod -R 755 /var/www/"$DOMAIN"
+
+  # 创建默认的 index.html
+  echo "创建默认的 index.html..."
+  cat > "$WEB_ROOT/index.html" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to $DOMAIN!</title>
+</head>
+<body>
+    <h1>成功部署 Nginx！</h1>
+    <p>您的域名 <strong>$DOMAIN</strong> 已经成功配置并启用了 TLS。</p>
+</body>
+</html>
+EOF
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
 
-  echo "配置 Nginx 反向代理..."
+  echo "配置 Nginx 服务器块..."
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
+    listen [::]:80;
     server_name $DOMAIN;
 
-    location / {
-        proxy_pass $TARGET;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+    root $WEB_ROOT;
+    index index.html index.htm index.nginx-debian.html;
 
-        # 可选：设置 WebSocket 的超时时间
-        proxy_read_timeout 86400;
+    location / {
+        try_files \$uri \$uri/ =404;
     }
 }
 EOF
@@ -77,7 +92,7 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -88,15 +103,36 @@ EOF
   systemctl enable certbot.timer
   systemctl start certbot.timer
 
-  echo "Nginx 反向代理和 TLS 证书配置完成！"
+  echo "Nginx 配置和 TLS 证书申请完成！"
   echo "你的网站现在可以通过 https://$DOMAIN 访问。"
 }
 
 # 定义添加配置函数
 add_config() {
   read -p "请输入要添加的域名（例如 example.com 或 sub.example.com）： " DOMAIN
-  read -p "请输入反向代理的目标地址（例如 http://localhost:3000）： " TARGET
   read -p "请输入用于 TLS 证书的邮箱地址： " EMAIL
+
+  # 创建网站根目录
+  WEB_ROOT="/var/www/$DOMAIN/html"
+  echo "创建网站根目录 $WEB_ROOT ..."
+  mkdir -p "$WEB_ROOT"
+  chown -R www-data:www-data /var/www/"$DOMAIN"
+  chmod -R 755 /var/www/"$DOMAIN"
+
+  # 创建默认的 index.html
+  echo "创建默认的 index.html..."
+  cat > "$WEB_ROOT/index.html" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to $DOMAIN!</title>
+</head>
+<body>
+    <h1>成功部署 Nginx！</h1>
+    <p>您的域名 <strong>$DOMAIN</strong> 已经成功配置并启用了 TLS。</p>
+</body>
+</html>
+EOF
 
   CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
   ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
@@ -106,24 +142,18 @@ add_config() {
     return
   fi
 
-  echo "配置 Nginx 反向代理..."
+  echo "配置 Nginx 服务器块..."
   cat > "$CONFIG_PATH" <<EOF
 server {
     listen 80;
+    listen [::]:80;
     server_name $DOMAIN;
 
-    location / {
-        proxy_pass $TARGET;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+    root $WEB_ROOT;
+    index index.html index.htm index.nginx-debian.html;
 
-        # 可选：设置 WebSocket 的超时时间
-        proxy_read_timeout 86400;
+    location / {
+        try_files \$uri \$uri/ =404;
     }
 }
 EOF
@@ -144,7 +174,7 @@ EOF
   systemctl reload nginx
 
   echo "申请 Let's Encrypt TLS 证书..."
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
 
   if [ $? -ne 0 ]; then
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
@@ -167,51 +197,52 @@ modify_config() {
     return
   fi
 
-  read -p "请输入新的反向代理目标地址（例如 http://localhost:3000）： " NEW_TARGET
-
-  # 询问是否需要更新 TLS 证书的邮箱地址
-  while true; do
-    read -p "是否需要更新 TLS 证书的邮箱地址？ (y/n): " update_email
-    case $update_email in
-      y|Y )
-        UPDATE_EMAIL=true
-        break
-        ;;
-      n|N )
-        UPDATE_EMAIL=false
-        break
-        ;;
-      * )
-        echo "请输入 y 或 n。"
-        ;;
-    esac
-  done
-
-  if [ "$UPDATE_EMAIL" = true ]; then
-    read -p "请输入新的邮箱地址： " NEW_EMAIL
+  read -p "是否需要更改域名？ (y/n): " change_domain
+  if [[ "$change_domain" =~ ^[Yy]$ ]]; then
+    read -p "请输入新的域名： " NEW_DOMAIN
+  else
+    NEW_DOMAIN="$DOMAIN"
   fi
 
-  echo "更新 Nginx 配置..."
-  cat > "$CONFIG_PATH" <<EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
+  read -p "是否需要更改 TLS 证书的邮箱地址？ (y/n): " change_email
+  if [[ "$change_email" =~ ^[Yy]$ ]]; then
+    read -p "请输入新的邮箱地址： " NEW_EMAIL
+  else
+    NEW_EMAIL=""
+  fi
 
-    location / {
-        proxy_pass $NEW_TARGET;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+  # 如果域名有变化，处理文件和目录
+  if [ "$NEW_DOMAIN" != "$DOMAIN" ]; then
+    echo "更改域名为 $NEW_DOMAIN ..."
 
-        # 可选：设置 WebSocket 的超时时间
-        proxy_read_timeout 86400;
-    }
-}
-EOF
+    # 重命名网站根目录
+    OLD_WEB_ROOT="/var/www/$DOMAIN/html"
+    NEW_WEB_ROOT="/var/www/$NEW_DOMAIN/html"
+    mv "$OLD_WEB_ROOT" "$NEW_WEB_ROOT"
+    mkdir -p "$NEW_WEB_ROOT"
+    chown -R www-data:www-data /var/www/"$NEW_DOMAIN"
+    chmod -R 755 /var/www/"$NEW_DOMAIN"
+
+    # 更新 index.html 中的域名
+    sed -i "s/$DOMAIN/$NEW_DOMAIN/g" "$NEW_WEB_ROOT/index.html"
+
+    # 更新配置文件
+    sed -i "s/server_name $DOMAIN;/server_name $NEW_DOMAIN;/g" "$CONFIG_PATH"
+
+    # 重命名配置文件
+    mv "$CONFIG_PATH" "/etc/nginx/sites-available/$NEW_DOMAIN"
+    rm "/etc/nginx/sites-enabled/$DOMAIN"
+    ln -s "/etc/nginx/sites-available/$NEW_DOMAIN" "/etc/nginx/sites-enabled/$NEW_DOMAIN"
+
+    DOMAIN="$NEW_DOMAIN"
+  fi
+
+  # 如果需要更改邮箱地址
+  if [ "$change_email" =~ ^[Yy]$ ]; then
+    EMAIL="$NEW_EMAIL"
+  else
+    EMAIL=""
+  fi
 
   echo "测试 Nginx 配置..."
   nginx -t
@@ -225,10 +256,10 @@ EOF
   systemctl reload nginx
 
   echo "重新申请 Let's Encrypt TLS 证书..."
-  if [ "$UPDATE_EMAIL" = true ]; then
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$NEW_EMAIL"
+  if [ -n "$EMAIL" ]; then
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
   else
-    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect
   fi
 
   if [ $? -ne 0 ]; then
@@ -236,18 +267,7 @@ EOF
       exit 1
   fi
 
-  if [ "$UPDATE_EMAIL" = true ]; then
-    echo "更新 TLS 证书的邮箱地址..."
-    certbot update_account --email "$NEW_EMAIL"
-
-    if [ $? -ne 0 ]; then
-        echo "Certbot 更新邮箱地址失败。"
-        exit 1
-    fi
-  fi
-
-  echo "配置修改完成！"
-  echo "你的网站现在可以通过 https://$DOMAIN 访问。"
+  echo "配置修改完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
 
 # 定义卸载函数
@@ -265,9 +285,10 @@ uninstall_nginx() {
   echo "卸载 Nginx、UFW 和 Certbot..."
   apt remove --purge -y nginx ufw certbot python3-certbot-nginx
 
-  echo "删除 Nginx 配置文件..."
+  echo "删除 Nginx 配置文件和网站根目录..."
   rm -rf /etc/nginx/sites-available/
   rm -rf /etc/nginx/sites-enabled/
+  rm -rf /var/www/
 
   echo "移除防火墙规则..."
   ufw delete allow 'Nginx Full'
@@ -287,9 +308,9 @@ while true; do
   echo "  YouTube：https://www.youtube.com/@1keji_net"
   echo "  GitHub： https://github.com/1keji"
   echo "==============================="
-  echo "1. 安装 Nginx 及配置反向代理和 TLS"
-  echo "2. 添加新的反向代理配置"
-  echo "3. 修改现有的反向代理配置"
+  echo "1. 安装 Nginx 及配置网站和 TLS"
+  echo "2. 添加新的网站配置"
+  echo "3. 修改现有的网站配置"
   echo "4. 卸载 Nginx 和所有配置"
   echo "0. 退出"
   echo "==============================="
