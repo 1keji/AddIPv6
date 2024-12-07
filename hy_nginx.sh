@@ -6,6 +6,12 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# 定义证书存放路径
+TLS_DIR="/root/tls"
+
+# 创建TLS目录如果不存在
+mkdir -p "$TLS_DIR"
+
 # 定义安装函数
 install_nginx() {
   echo "更新系统包..."
@@ -99,6 +105,10 @@ EOF
       exit 1
   fi
 
+  # 复制证书到TLS目录
+  echo "复制证书到 $TLS_DIR ..."
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
+
   echo "设置自动续期..."
   systemctl enable certbot.timer
   systemctl start certbot.timer
@@ -181,6 +191,10 @@ EOF
       exit 1
   fi
 
+  # 复制证书到TLS目录
+  echo "复制证书到 $TLS_DIR ..."
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
+
   echo "配置添加完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
 
@@ -238,7 +252,7 @@ modify_config() {
   fi
 
   # 如果需要更改邮箱地址
-  if [ "$change_email" =~ ^[Yy]$ ]; then
+  if [[ "$change_email" =~ ^[Yy]$ ]]; then
     EMAIL="$NEW_EMAIL"
   else
     EMAIL=""
@@ -266,6 +280,10 @@ modify_config() {
       echo "Certbot 申请证书失败。请检查域名的 DNS 设置是否正确。"
       exit 1
   fi
+
+  # 复制证书到TLS目录
+  echo "复制证书到 $TLS_DIR ..."
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
 
   echo "配置修改完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
@@ -297,7 +315,47 @@ uninstall_nginx() {
   systemctl disable certbot.timer
   systemctl stop certbot.timer
 
+  echo "删除 TLS 证书目录..."
+  rm -rf "$TLS_DIR"
+
   echo "Nginx 和相关配置已卸载。"
+}
+
+# 定义查看证书函数
+view_certificates() {
+  echo "当前存放在 $TLS_DIR 的证书："
+  if [ -d "$TLS_DIR" ]; then
+    ls -l "$TLS_DIR"
+  else
+    echo "$TLS_DIR 目录不存在。"
+  fi
+}
+
+# 定义删除证书函数
+delete_certificate() {
+  echo "当前存放在 $TLS_DIR 的证书："
+  if [ -d "$TLS_DIR" ]; then
+    ls -l "$TLS_DIR"
+  else
+    echo "$TLS_DIR 目录不存在。"
+    return
+  fi
+
+  read -p "请输入要删除的域名（不包含扩展名）： " DOMAIN
+
+  # 删除TLS目录中的证书文件
+  echo "删除 $TLS_DIR 中的证书文件..."
+  rm -rf "$TLS_DIR/$DOMAIN"
+
+  # 使用Certbot删除证书
+  echo "使用Certbot删除证书..."
+  certbot delete --cert-name "$DOMAIN"
+
+  if [ $? -eq 0 ]; then
+    echo "证书 $DOMAIN 删除成功。"
+  else
+    echo "证书 $DOMAIN 删除失败。请手动检查。"
+  fi
 }
 
 # 显示菜单
@@ -312,9 +370,11 @@ while true; do
   echo "2. 添加新的网站配置"
   echo "3. 修改现有的网站配置"
   echo "4. 卸载 Nginx 和所有配置"
+  echo "5. 查看已申请的证书"
+  echo "6. 删除已申请的证书"
   echo "0. 退出"
   echo "==============================="
-  read -p "请选择一个选项 [0-4]: " choice
+  read -p "请选择一个选项 [0-6]: " choice
 
   case $choice in
     1)
@@ -328,6 +388,12 @@ while true; do
       ;;
     4)
       uninstall_nginx
+      ;;
+    5)
+      view_certificates
+      ;;
+    6)
+      delete_certificate
       ;;
     0)
       echo "退出脚本。"
