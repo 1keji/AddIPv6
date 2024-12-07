@@ -105,9 +105,11 @@ EOF
       exit 1
   fi
 
-  # 复制证书到TLS目录
-  echo "复制证书到 $TLS_DIR ..."
-  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
+  # 创建域名对应的TLS子目录并复制证书
+  DOMAIN_TLS_DIR="$TLS_DIR/$DOMAIN"
+  echo "创建域名证书目录 $DOMAIN_TLS_DIR ..."
+  mkdir -p "$DOMAIN_TLS_DIR"
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$DOMAIN_TLS_DIR"/
 
   echo "设置自动续期..."
   systemctl enable certbot.timer
@@ -191,9 +193,11 @@ EOF
       exit 1
   fi
 
-  # 复制证书到TLS目录
-  echo "复制证书到 $TLS_DIR ..."
-  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
+  # 创建域名对应的TLS子目录并复制证书
+  DOMAIN_TLS_DIR="$TLS_DIR/$DOMAIN"
+  echo "创建域名证书目录 $DOMAIN_TLS_DIR ..."
+  mkdir -p "$DOMAIN_TLS_DIR"
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$DOMAIN_TLS_DIR"/
 
   echo "配置添加完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
@@ -248,6 +252,15 @@ modify_config() {
     rm "/etc/nginx/sites-enabled/$DOMAIN"
     ln -s "/etc/nginx/sites-available/$NEW_DOMAIN" "/etc/nginx/sites-enabled/$NEW_DOMAIN"
 
+    # 处理TLS目录
+    OLD_DOMAIN_TLS_DIR="$TLS_DIR/$DOMAIN"
+    NEW_DOMAIN_TLS_DIR="$TLS_DIR/$NEW_DOMAIN"
+    if [ -d "$OLD_DOMAIN_TLS_DIR" ]; then
+      mv "$OLD_DOMAIN_TLS_DIR" "$NEW_DOMAIN_TLS_DIR"
+    else
+      mkdir -p "$NEW_DOMAIN_TLS_DIR"
+    fi
+
     DOMAIN="$NEW_DOMAIN"
   fi
 
@@ -281,9 +294,11 @@ modify_config() {
       exit 1
   fi
 
-  # 复制证书到TLS目录
-  echo "复制证书到 $TLS_DIR ..."
-  cp /etc/letsencrypt/live/"$DOMAIN"/* "$TLS_DIR"/
+  # 复制证书到新的TLS子目录
+  DOMAIN_TLS_DIR="$TLS_DIR/$DOMAIN"
+  echo "复制证书到 $DOMAIN_TLS_DIR ..."
+  mkdir -p "$DOMAIN_TLS_DIR"
+  cp /etc/letsencrypt/live/"$DOMAIN"/* "$DOMAIN_TLS_DIR"/
 
   echo "配置修改完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
@@ -325,7 +340,13 @@ uninstall_nginx() {
 view_certificates() {
   echo "当前存放在 $TLS_DIR 的证书："
   if [ -d "$TLS_DIR" ]; then
-    ls -l "$TLS_DIR"
+    for domain_dir in "$TLS_DIR"/*/; do
+      [ -d "$domain_dir" ] || continue
+      domain=$(basename "$domain_dir")
+      echo "域名: $domain"
+      ls -l "$domain_dir"
+      echo ""
+    done
   else
     echo "$TLS_DIR 目录不存在。"
   fi
@@ -335,17 +356,28 @@ view_certificates() {
 delete_certificate() {
   echo "当前存放在 $TLS_DIR 的证书："
   if [ -d "$TLS_DIR" ]; then
-    ls -l "$TLS_DIR"
+    for domain_dir in "$TLS_DIR"/*/; do
+      [ -d "$domain_dir" ] || continue
+      domain=$(basename "$domain_dir")
+      echo "域名: $domain"
+    done
   else
     echo "$TLS_DIR 目录不存在。"
     return
   fi
 
-  read -p "请输入要删除的域名（不包含扩展名）： " DOMAIN
+  read -p "请输入要删除的域名（例如 example.com）： " DOMAIN
+
+  DOMAIN_TLS_DIR="$TLS_DIR/$DOMAIN"
+
+  if [ ! -d "$DOMAIN_TLS_DIR" ]; then
+    echo "域名 $DOMAIN 的证书目录不存在。"
+    return
+  fi
 
   # 删除TLS目录中的证书文件
-  echo "删除 $TLS_DIR 中的证书文件..."
-  rm -rf "$TLS_DIR/$DOMAIN"
+  echo "删除 $DOMAIN_TLS_DIR 中的证书文件..."
+  rm -rf "$DOMAIN_TLS_DIR"
 
   # 使用Certbot删除证书
   echo "使用Certbot删除证书..."
