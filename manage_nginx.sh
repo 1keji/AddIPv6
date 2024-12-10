@@ -6,13 +6,46 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# 定义管理防火墙的函数
+manage_firewall() {
+    echo "检查防火墙状态..."
+
+    if command -v ufw >/dev/null 2>&1; then
+        if ufw status | grep -q "Status: active"; then
+            echo "检测到 UFW 防火墙已启用。允许 SSH、HTTP 和 HTTPS 端口..."
+            ufw allow OpenSSH
+            ufw allow 'Nginx Full'
+        else
+            echo "UFW 防火墙未启用，跳过 UFW 配置。请确保必要的端口已开放。"
+        fi
+    elif systemctl is-active --quiet firewalld; then
+        echo "检测到 firewalld 防火墙已启用。允许 SSH、HTTP 和 HTTPS 端口..."
+        firewall-cmd --permanent --add-service=ssh
+        firewall-cmd --permanent --add-service=http
+        firewall-cmd --permanent --add-service=https
+        firewall-cmd --reload
+    elif command -v iptables >/dev/null 2>&1; then
+        echo "检测到 iptables 防火墙。允许 SSH、HTTP 和 HTTPS 端口..."
+        # 检查并添加规则，如果不存在
+        iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+        iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+        iptables -C INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+        # 保存规则
+        if command -v iptables-save >/dev/null 2>&1; then
+            iptables-save > /etc/iptables/rules.v4
+        fi
+    else
+        echo "未检测到已知的防火墙工具。请手动确保 SSH (22), HTTP (80) 和 HTTPS (443) 端口已开放。"
+    fi
+}
+
 # 定义安装函数
 install_nginx() {
   echo "更新系统包..."
   apt update && apt upgrade -y
 
-  echo "安装 Nginx、UFW 和 Certbot..."
-  apt install -y nginx ufw certbot python3-certbot-nginx
+  echo "安装 Nginx 和 Certbot..."
+  apt install -y nginx certbot python3-certbot-nginx
 
   echo "确保 Nginx 配置目录存在..."
   mkdir -p /etc/nginx/sites-available
@@ -22,16 +55,8 @@ install_nginx() {
   systemctl start nginx
   systemctl enable nginx
 
-  echo "配置防火墙允许 SSH、HTTP 和 HTTPS..."
-  ufw allow OpenSSH
-  ufw allow 'Nginx Full'
-  
-  # 检查 UFW 是否已启用，若未启用则启用
-  if ! ufw status | grep -q "Status: active"; then
-    ufw --force enable
-  else
-    echo "UFW 已经启用。"
-  fi
+  echo "配置防火墙以允许必要的端口..."
+  manage_firewall
 
   read -p "请输入你的邮箱地址（用于 Let's Encrypt 通知）： " EMAIL
   read -p "请输入你的域名（例如 example.com 或 sub.example.com）： " DOMAIN
@@ -63,14 +88,16 @@ server {
 EOF
 
   echo "创建符号链接到 sites-enabled..."
-  ln -s "$CONFIG_PATH" "$ENABLED_PATH"
+  ln -s "$CONFIG_PATH" "$ENABLED_PATH" || {
+      echo "符号链接已存在，跳过。"
+  }
 
   echo "测试 Nginx 配置..."
   nginx -t
 
   if [ $? -ne 0 ]; then
       echo "Nginx 配置测试失败，请检查配置文件。"
-      rm "$ENABLED_PATH"
+      rm -f "$ENABLED_PATH"
       exit 1
   fi
 
@@ -130,14 +157,16 @@ server {
 EOF
 
   echo "创建符号链接到 sites-enabled..."
-  ln -s "$CONFIG_PATH" "$ENABLED_PATH"
+  ln -s "$CONFIG_PATH" "$ENABLED_PATH" || {
+      echo "符号链接已存在，跳过。"
+  }
 
   echo "测试 Nginx 配置..."
   nginx -t
 
   if [ $? -ne 0 ]; then
       echo "Nginx 配置测试失败，请检查配置文件。"
-      rm "$ENABLED_PATH"
+      rm -f "$ENABLED_PATH"
       exit 1
   fi
 
@@ -247,8 +276,7 @@ EOF
     fi
   fi
 
-  echo "配置修改完成！"
-  echo "你的网站现在可以通过 https://$DOMAIN 访问。"
+  echo "配置修改完成！你的网站现在可以通过 https://$DOMAIN 访问。"
 }
 
 # 定义卸载函数
@@ -263,16 +291,34 @@ uninstall_nginx() {
   systemctl stop nginx
   systemctl disable nginx
 
-  echo "卸载 Nginx、UFW 和 Certbot..."
-  apt remove --purge -y nginx ufw certbot python3-certbot-nginx
+  echo "卸载 Nginx 和 Certbot..."
+  apt remove --purge -y nginx certbot python3-certbot-nginx
 
   echo "删除 Nginx 配置文件..."
   rm -rf /etc/nginx/sites-available/
   rm -rf /etc/nginx/sites-enabled/
 
-  echo "移除防火墙规则..."
-  ufw delete allow 'Nginx Full'
-  ufw delete allow OpenSSH
+  echo "移除防火墙规则（如果适用）..."
+
+  if command -v ufw >/dev/null 2>&1; then
+      echo "使用 UFW 移除规则..."
+      ufw delete allow 'Nginx Full'
+      ufw delete allow OpenSSH
+  elif systemctl is-active --quiet firewalld; then
+      echo "使用 firewalld 移除规则..."
+      firewall-cmd --permanent --remove-service=ssh
+      firewall-cmd --permanent --remove-service=http
+      firewall-cmd --permanent --remove-service=https
+      firewall-cmd --reload
+  elif command -v iptables >/dev/null 2>&1; then
+      echo "使用 iptables 移除规则..."
+      iptables -D INPUT -p tcp --dport 22 -j ACCEPT
+      iptables -D INPUT -p tcp --dport 80 -j ACCEPT
+      iptables -D INPUT -p tcp --dport 443 -j ACCEPT
+      iptables-save > /etc/iptables/rules.v4
+  else
+      echo "未检测到已知的防火墙工具，跳过防火墙规则移除。"
+  fi
 
   echo "删除 Certbot 自动续期定时任务..."
   systemctl disable certbot.timer
