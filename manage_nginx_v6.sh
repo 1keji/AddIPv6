@@ -6,13 +6,78 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# 定义需要打开的端口
+REQUIRED_PORTS=(80 443)
+
+# 检测并打开必要端口的函数
+configure_firewall() {
+  echo "检测并配置防火墙以开放必要的端口..."
+
+  # 检查 ufw 是否安装和启用
+  if command -v ufw >/dev/null 2>&1; then
+    echo "检测到 ufw 防火墙。"
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if ! ufw status | grep -qw "$port"; then
+        echo "允许端口 $port ..."
+        ufw allow "$port"
+      else
+        echo "端口 $port 已经开放。"
+      fi
+    done
+    echo "防火墙配置完成。"
+    return
+  fi
+
+  # 检查 firewalld 是否安装和启用
+  if systemctl is-active --quiet firewalld; then
+    echo "检测到 firewalld 防火墙。"
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if ! firewall-cmd --list-ports | grep -qw "${port}/tcp"; then
+        echo "允许端口 $port ..."
+        firewall-cmd --permanent --add-port=${port}/tcp
+      else
+        echo "端口 $port 已经开放。"
+      fi
+    done
+    firewall-cmd --reload
+    echo "防火墙配置完成。"
+    return
+  fi
+
+  # 检查 iptables 是否安装
+  if command -v iptables >/dev/null 2>&1; then
+    echo "检测到 iptables 防火墙。"
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if ! iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+        echo "允许端口 $port ..."
+        iptables -I INPUT -p tcp --dport "$port" -j ACCEPT
+      else
+        echo "端口 $port 已经开放。"
+      fi
+    done
+    # 保存 iptables 规则（根据系统不同，可能需要调整）
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+      netfilter-persistent save
+    elif command -v service >/dev/null 2>&1; then
+      service iptables save
+    fi
+    echo "防火墙配置完成。"
+    return
+  fi
+
+  echo "未检测到已知的防火墙工具（ufw、firewalld、iptables）。请手动确保端口 ${REQUIRED_PORTS[*]} 已开放。"
+}
+
 # 定义安装函数
 install_nginx() {
   echo "更新系统包..."
   apt update && apt upgrade -y
 
-  echo "安装 Nginx、UFW 和 Certbot..."
-  apt install -y nginx ufw certbot python3-certbot-nginx
+  echo "安装 Nginx 和 Certbot..."
+  apt install -y nginx certbot python3-certbot-nginx
+
+  echo "配置防火墙以开放必要端口..."
+  configure_firewall
 
   echo "确保 Nginx 配置目录存在..."
   mkdir -p /etc/nginx/sites-available
@@ -21,19 +86,6 @@ install_nginx() {
   echo "启动并启用 Nginx 服务..."
   systemctl start nginx
   systemctl enable nginx
-
-  echo "配置防火墙允许 SSH、HTTP 和 HTTPS..."
-  # 允许 SSH 流量
-  ufw allow OpenSSH
-  # 允许 Nginx Full（HTTP 和 HTTPS）
-  ufw allow 'Nginx Full'
-  
-  # 检查 UFW 是否已启用，若未启用则启用
-  if ! ufw status | grep -q "Status: active"; then
-    ufw --force enable
-  else
-    echo "UFW 已经启用。"
-  fi
 
   read -p "请输入你的邮箱地址（用于 Let's Encrypt 通知）： " EMAIL
   read -p "请输入你的域名（例如 example.com 或 sub.example.com）： " DOMAIN
@@ -269,20 +321,51 @@ uninstall_nginx() {
   systemctl stop nginx
   systemctl disable nginx
 
-  echo "卸载 Nginx、UFW 和 Certbot..."
-  apt remove --purge -y nginx ufw certbot python3-certbot-nginx
+  echo "卸载 Nginx 和 Certbot..."
+  apt remove --purge -y nginx certbot python3-certbot-nginx
 
   echo "删除 Nginx 配置文件..."
   rm -rf /etc/nginx/sites-available/
   rm -rf /etc/nginx/sites-enabled/
 
-  echo "移除防火墙规则..."
-  ufw delete allow 'Nginx Full'
-  ufw delete allow OpenSSH
-
   echo "删除 Certbot 自动续期定时任务..."
   systemctl disable certbot.timer
   systemctl stop certbot.timer
+
+  # 检测并移除防火墙规则
+  echo "移除防火墙中开放的端口..."
+  
+  if command -v ufw >/dev/null 2>&1; then
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if ufw status | grep -qw "$port"; then
+        echo "移除 ufw 端口 $port ..."
+        ufw delete allow "$port"
+      fi
+    done
+  elif systemctl is-active --quiet firewalld; then
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if firewall-cmd --list-ports | grep -qw "${port}/tcp"; then
+        echo "移除 firewalld 端口 $port ..."
+        firewall-cmd --permanent --remove-port=${port}/tcp
+      fi
+    done
+    firewall-cmd --reload
+  elif command -v iptables >/dev/null 2>&1; then
+    for port in "${REQUIRED_PORTS[@]}"; do
+      if iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+        echo "移除 iptables 端口 $port ..."
+        iptables -D INPUT -p tcp --dport "$port" -j ACCEPT
+      fi
+    done
+    # 保存 iptables 规则（根据系统不同，可能需要调整）
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+      netfilter-persistent save
+    elif command -v service >/dev/null 2>&1; then
+      service iptables save
+    fi
+  else
+    echo "未检测到已知的防火墙工具（ufw、firewalld、iptables），请手动移除端口 ${REQUIRED_PORTS[*]} 的开放规则。"
+  fi
 
   echo "Nginx 和相关配置已卸载。"
 }
