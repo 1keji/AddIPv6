@@ -22,7 +22,10 @@ install_nginx() {
   systemctl start nginx
   systemctl enable nginx
 
-  echo "配置防火墙允许 HTTP 和 HTTPS..."
+  echo "配置防火墙允许 SSH、HTTP 和 HTTPS..."
+  # 允许 SSH 流量
+  ufw allow OpenSSH
+  # 允许 Nginx Full（HTTP 和 HTTPS）
   ufw allow 'Nginx Full'
   
   # 检查 UFW 是否已启用，若未启用则启用
@@ -275,6 +278,7 @@ uninstall_nginx() {
 
   echo "移除防火墙规则..."
   ufw delete allow 'Nginx Full'
+  ufw delete allow OpenSSH
 
   echo "删除 Certbot 自动续期定时任务..."
   systemctl disable certbot.timer
