@@ -158,15 +158,39 @@ install_docker() {
 
     # 将当前用户添加到 docker 用户组（以便无需 sudo 运行 Docker 命令）
     echo "将当前用户添加到 docker 用户组（以便无需 sudo 运行 Docker 命令）..."
-    read -p "请输入要添加到 docker 组的用户名（默认为当前用户）： " USERNAME
-    USERNAME=${USERNAME:-$SUDO_USER}
 
-    if id -nG "$USERNAME" | grep -qw "docker"; then
-        echo "用户 $USERNAME 已经在 docker 组中。"
+    # 获取所有系统用户
+    USERS=$(cut -d: -f1 /etc/passwd | sort)
+
+    # 判断是否通过 sudo 运行，获取默认用户名
+    if [ -n "$SUDO_USER" ]; then
+        DEFAULT_USER="$SUDO_USER"
     else
-        usermod -aG docker "$USERNAME"
-        echo "用户 $USERNAME 已添加到 docker 组。"
-        echo "请注销并重新登录以使更改生效。"
+        DEFAULT_USER=""
+    fi
+
+    echo "现有用户列表："
+    echo "$USERS"
+    echo "如果您不需要添加用户到 docker 组，可以直接按回车键跳过。"
+
+    read -p "请输入要添加到 docker 组的用户名（默认为当前用户）： " USERNAME
+    USERNAME=${USERNAME:-$DEFAULT_USER}
+
+    if [ -z "$USERNAME" ]; then
+        echo "未指定用户，跳过添加到 docker 组。"
+    else
+        # 检查用户是否存在
+        if id "$USERNAME" >/dev/null 2>&1; then
+            if id -nG "$USERNAME" | grep -qw "docker"; then
+                echo "用户 $USERNAME 已经在 docker 组中。"
+            else
+                usermod -aG docker "$USERNAME"
+                echo "用户 $USERNAME 已添加到 docker 组。"
+                echo "请注销并重新登录以使更改生效。"
+            fi
+        else
+            echo "用户 $USERNAME 不存在，无法添加到 docker 组。"
+        fi
     fi
 
     echo "Docker 和 Docker Compose 安装完成！"
@@ -209,14 +233,38 @@ uninstall_docker() {
 
     # 从 docker 组中移除用户
     echo "从 docker 组中移除用户..."
-    read -p "请输入要从 docker 组中移除的用户名（默认为当前用户）： " USERNAME
-    USERNAME=${USERNAME:-$SUDO_USER}
 
-    if id -nG "$USERNAME" | grep -qw "docker"; then
-        gpasswd -d "$USERNAME" docker
-        echo "用户 $USERNAME 已从 docker 组中移除。"
+    # 获取所有系统用户
+    USERS=$(cut -d: -f1 /etc/passwd | sort)
+
+    # 判断是否通过 sudo 运行，获取默认用户名
+    if [ -n "$SUDO_USER" ]; then
+        DEFAULT_USER="$SUDO_USER"
     else
-        echo "用户 $USERNAME 不在 docker 组中。"
+        DEFAULT_USER=""
+    fi
+
+    echo "现有用户列表："
+    echo "$USERS"
+    echo "如果您不需要移除用户，可以直接按回车键跳过。"
+
+    read -p "请输入要从 docker 组中移除的用户名（默认为当前用户）： " USERNAME
+    USERNAME=${USERNAME:-$DEFAULT_USER}
+
+    if [ -z "$USERNAME" ]; then
+        echo "未指定用户，跳过从 docker 组中移除。"
+    else
+        # 检查用户是否存在
+        if id "$USERNAME" >/dev/null 2>&1; then
+            if id -nG "$USERNAME" | grep -qw "docker"; then
+                gpasswd -d "$USERNAME" docker
+                echo "用户 $USERNAME 已从 docker 组中移除。"
+            else
+                echo "用户 $USERNAME 不在 docker 组中。"
+            fi
+        else
+            echo "用户 $USERNAME 不存在，无法从 docker 组中移除。"
+        fi
     fi
 
     echo "Docker 和 Docker Compose 已成功卸载！"
@@ -306,4 +354,3 @@ while true; do
     esac
     echo ""
 done
-
