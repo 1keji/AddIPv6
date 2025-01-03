@@ -17,7 +17,7 @@ show_menu() {
     echo "1. 安装 Docker 和 Docker Compose"
     echo "2. 卸载 Docker 和 Docker Compose"
     echo "3. 查询安装情况和运行状态"
-    echo "4. 退出脚本"
+    echo "0. 退出脚本"
     echo "=========================================="
 }
 
@@ -334,7 +334,7 @@ fi
 # 主循环
 while true; do
     show_menu
-    read -p "请输入你的选择 [1-4]: " choice
+    read -p "请输入你的选择 [0,1-3]: " choice
     case $choice in
         1)
             install_docker
@@ -345,11 +345,11 @@ while true; do
         3)
             check_status
             ;;
-        4)
+        0)
             exit_script
             ;;
         *)
-            echo "无效的选择，请输入 1-4 之间的数字。"
+            echo "无效的选择，请输入 0 或 1-3 之间的数字。"
             ;;
     esac
     echo ""
